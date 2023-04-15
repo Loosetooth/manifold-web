@@ -1,9 +1,58 @@
 ## About manifold-web
 
 This is a package made with the goal of having a Webpack compatible npm module for use in the browser. (Not node.js)
-See [the discussion](https://github.com/elalish/manifold/discussions/372) for more details. The steps to create this package are exactly the same as [here](https://github.com/polygonjs/polygonjs/tree/integration-manifold/src/core/geometry/sdf/manifold) but are mentioned again in detail here:
+See [the discussion](https://github.com/elalish/manifold/discussions/372) for more details.
+
+## Installation and use
+
+To install:
+`npm install git+https://github.com/Loosetooth/manifold-web.git`
+
+Some tips:
+
+You might need to pass a reference of the `.wasm` url to the manifold instance:
+```js
+import Module from "manifold-web";
+import manifold_wasm from 'manifold-web/manifold.wasm?url'
+
+const wasm = await Module({
+    locateFile: () => manifold_wasm,
+});
+wasm.setup()
+```
+
+You might also need to add this to your webpack config to pack .wasm files:
+```js
+config.module.rules.push({
+    test: /\.wasm$/,
+    type: "javascript/auto",
+    loader: "file-loader",
+    options: {
+    name: "static/js/[name].[contenthash:8].[ext]",
+    },
+})
+```
+
+Or for vue.js:
+```js
+module.exports = {
+  chainWebpack: (config) => {
+    config.module
+      .rule('wasm')
+      .test(/\.wasm$/)
+      .use('file-loader')
+      .loader('file-loader')
+      .tap((options) => {
+        return {
+          name: "static/js/[name].[contenthash:8].[ext]",
+        }
+      })
+  },
+}
+```
 
 ## Steps to build:
+The steps to create this package are exactly the same as [here](https://github.com/polygonjs/polygonjs/tree/integration-manifold/src/core/geometry/sdf/manifold) but are mentioned again in detail here:
 
 ### Preparation
 
@@ -36,7 +85,7 @@ Since manifold.js is minified, we'll format it in preparation for the changes th
 npx prettier --write .
 ```
 
-Manually modify the following content in `mnifold.js` to be compatible with webpack:
+Manually modify the following content in `manifold.js` to be compatible with webpack:
 * remove the content of the `if (ENVIRONMENT_IS_NODE) {}` block
 * comment out the line `wasmBinaryFile = new URL('manifold.wasm', import.meta.url).href;`
 
