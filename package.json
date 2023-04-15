@@ -1,5 +1,5 @@
 {
-  "name": "manifold-3d",
+  "name": "manifold-web",
   "version": "2.1.0",
   "description": "Geometry library for topological robustness",
   "main": "manifold.js",
@@ -31,7 +31,8 @@
   ],
   "contributors": [
     "Emmett Lalish <elalish>",
-    "Chun Kit LAM <pca006132>"
+    "Chun Kit LAM <pca006132>",
+    "Loose Tooth <loosetooth>"
   ],
   "license": "Apache-2.0",
   "bugs": {
