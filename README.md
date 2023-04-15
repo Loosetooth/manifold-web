@@ -1,6 +1,6 @@
 ## About manifold-web
 
-This is a package made with the goal of having a Webpack compatible npm module for use in the browser. (Not node.js)
+This is a package made with the goal of having a Webpack compatible npm module for [manifold](https://github.com/elalish/manifold), for use in the browser. (Not node.js)
 See [the discussion](https://github.com/elalish/manifold/discussions/372) for more details.
 
 ## Installation and use
