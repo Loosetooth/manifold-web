@@ -62,6 +62,34 @@ var Module = (() => {
         }, "vi");
         const out = this._Warp(wasmFuncPtr);
         removeFunction(wasmFuncPtr);
+        const status = out.status();
+        if (status.value !== 0) {
+          throw new Module.ManifoldError(status.value);
+        }
+        return out;
+      };
+      Module.Manifold.prototype.setProperties = function (numProp, func) {
+        const oldNumProp = this.numProp;
+        const wasmFuncPtr = addFunction(function (newPtr, vec3Ptr, oldPtr) {
+          const newProp = [];
+          for (let i = 0; i < numProp; ++i) {
+            newProp[i] = getValue(newPtr + 4 * i, "float");
+          }
+          const pos = [];
+          for (let i = 0; i < 3; ++i) {
+            pos[i] = getValue(vec3Ptr + 4 * i, "float");
+          }
+          const oldProp = [];
+          for (let i = 0; i < oldNumProp; ++i) {
+            oldProp[i] = getValue(oldPtr + 4 * i, "float");
+          }
+          func(newProp, pos, oldProp);
+          for (let i = 0; i < numProp; ++i) {
+            setValue(newPtr + 4 * i, newProp[i], "float");
+          }
+        }, "viii");
+        const out = this._SetProperties(numProp, wasmFuncPtr);
+        removeFunction(wasmFuncPtr);
         return out;
       };
       Module.Manifold.prototype.translate = function (...vec) {
@@ -130,6 +158,11 @@ var Module = (() => {
         }
         get numRun() {
           return this.runOriginalID.length;
+        }
+        merge() {
+          const { changed: changed, mesh: mesh } = Module._Merge(this);
+          Object.assign(this, { ...mesh });
+          return changed;
         }
         verts(tri) {
           return this.triVerts.subarray(3 * tri, 3 * (tri + 1));
@@ -624,10 +657,10 @@ var Module = (() => {
       function receiveInstance(instance, module) {
         var exports = instance.exports;
         Module["asm"] = exports;
-        wasmMemory = Module["asm"]["la"];
+        wasmMemory = Module["asm"]["ka"];
         updateMemoryViews();
-        wasmTable = Module["asm"]["qa"];
-        addOnInit(Module["asm"]["ma"]);
+        wasmTable = Module["asm"]["pa"];
+        addOnInit(Module["asm"]["la"]);
         removeRunDependency("wasm-instantiate");
         return exports;
       }
@@ -3244,12 +3277,12 @@ var Module = (() => {
       z: ___cxa_throw,
       d: ___resumeException,
       aa: __embind_finalize_value_object,
-      O: __embind_register_bigint,
-      T: __embind_register_bool,
+      Q: __embind_register_bigint,
+      U: __embind_register_bool,
       v: __embind_register_class,
       u: __embind_register_class_constructor,
       h: __embind_register_class_function,
-      S: __embind_register_emval,
+      T: __embind_register_emval,
       $: __embind_register_enum,
       r: __embind_register_enum_value,
       H: __embind_register_float,
@@ -3260,74 +3293,73 @@ var Module = (() => {
       C: __embind_register_std_wstring,
       x: __embind_register_value_object,
       ba: __embind_register_value_object_field,
-      U: __embind_register_void,
+      V: __embind_register_void,
       fa: __emval_as,
-      ka: __emval_call_method,
+      O: __emval_call_method,
       ca: __emval_call_void_method,
       ha: __emval_decref,
       ea: __emval_equals,
-      N: __emval_get_method_caller,
+      P: __emval_get_method_caller,
       ga: __emval_get_property,
       da: __emval_incref,
       A: __emval_new_cstring,
-      W: __emval_new_object,
+      J: __emval_new_object,
       ja: __emval_run_destructors,
       ia: __emval_set_property,
       s: __emval_take_value,
       B: _abort,
-      Q: _emscripten_memcpy_big,
-      P: _emscripten_resize_heap,
+      S: _emscripten_memcpy_big,
+      R: _emscripten_resize_heap,
       F: invoke_diii,
       w: invoke_diiiii,
-      R: invoke_i,
       c: invoke_ii,
       f: invoke_iii,
-      l: invoke_iiii,
+      m: invoke_iiii,
       p: invoke_iiiii,
-      L: invoke_iiiiii,
+      M: invoke_iiiiii,
       i: invoke_v,
       b: invoke_vi,
       g: invoke_vii,
       Y: invoke_viiddi,
       D: invoke_viif,
-      V: invoke_viifff,
-      M: invoke_viififi,
+      W: invoke_viifff,
+      N: invoke_viififi,
       e: invoke_viii,
-      m: invoke_viiii,
+      k: invoke_viiii,
       y: invoke_viiiii,
-      K: invoke_viiiiifi,
+      L: invoke_viiiiifi,
       q: invoke_viiiiii,
       I: invoke_viiiiiii,
-      k: invoke_viiiiiiiiii,
-      J: invoke_viiiiiiiiiiii,
+      l: invoke_viiiiiiiiii,
+      K: invoke_viiiiiiiiiiii,
       X: _llvm_eh_typeid_for,
     };
     var asm = createWasm();
     var ___wasm_call_ctors = function () {
-      return (___wasm_call_ctors = Module["asm"]["ma"]).apply(null, arguments);
+      return (___wasm_call_ctors = Module["asm"]["la"]).apply(null, arguments);
     };
     var _malloc = function () {
-      return (_malloc = Module["asm"]["na"]).apply(null, arguments);
+      return (_malloc = Module["asm"]["ma"]).apply(null, arguments);
     };
     var _free = function () {
-      return (_free = Module["asm"]["oa"]).apply(null, arguments);
+      return (_free = Module["asm"]["na"]).apply(null, arguments);
     };
     var ___cxa_free_exception = function () {
-      return (___cxa_free_exception = Module["asm"]["pa"]).apply(
+      return (___cxa_free_exception = Module["asm"]["oa"]).apply(
         null,
         arguments
       );
     };
     var ___getTypeName = (Module["___getTypeName"] = function () {
       return (___getTypeName = Module["___getTypeName"] =
-        Module["asm"]["ra"]).apply(null, arguments);
+        Module["asm"]["qa"]).apply(null, arguments);
     });
     var __embind_initialize_bindings = (Module["__embind_initialize_bindings"] =
       function () {
         return (__embind_initialize_bindings = Module[
           "__embind_initialize_bindings"
         ] =
-          Module["asm"]["sa"]).apply(null, arguments);
+          Module["asm"]["ra"]).apply(null, arguments);
       });
     var ___errno_location = function () {
       return (___errno_location = Module["asm"]["__errno_location"]).apply(
@@ -3336,19 +3368,19 @@ var Module = (() => {
       );
     };
     var setTempRet0 = function () {
-      return (setTempRet0 = Module["asm"]["ta"]).apply(null, arguments);
+      return (setTempRet0 = Module["asm"]["sa"]).apply(null, arguments);
     };
     var stackSave = function () {
-      return (stackSave = Module["asm"]["ua"]).apply(null, arguments);
+      return (stackSave = Module["asm"]["ta"]).apply(null, arguments);
     };
     var stackRestore = function () {
-      return (stackRestore = Module["asm"]["va"]).apply(null, arguments);
+      return (stackRestore = Module["asm"]["ua"]).apply(null, arguments);
     };
     var ___cxa_can_catch = function () {
-      return (___cxa_can_catch = Module["asm"]["wa"]).apply(null, arguments);
+      return (___cxa_can_catch = Module["asm"]["va"]).apply(null, arguments);
     };
     var ___cxa_is_pointer_type = function () {
-      return (___cxa_is_pointer_type = Module["asm"]["xa"]).apply(
+      return (___cxa_is_pointer_type = Module["asm"]["wa"]).apply(
         null,
         arguments
       );
@@ -3377,16 +3409,6 @@ var Module = (() => {
       var sp = stackSave();
       try {
         getWasmTableEntry(index)(a1, a2, a3);
-      } catch (e) {
-        stackRestore(sp);
-        if (e !== e + 0) throw e;
-        _setThrew(1, 0);
-      }
-    }
-    function invoke_i(index) {
-      var sp = stackSave();
-      try {
-        return getWasmTableEntry(index)();
       } catch (e) {
         stackRestore(sp);
         if (e !== e + 0) throw e;
