@@ -1,10 +1,10 @@
 var Module = (() => {
   var _scriptDir = import.meta.url;
 
-  return async function (Module = {}) {
-    var Module = typeof Module != "undefined" ? Module : {};
+  return async function (moduleArg = {}) {
+    var Module = moduleArg;
     var readyPromiseResolve, readyPromiseReject;
-    Module["ready"] = new Promise(function (resolve, reject) {
+    Module["ready"] = new Promise((resolve, reject) => {
       readyPromiseResolve = resolve;
       readyPromiseReject = reject;
     });
@@ -26,6 +26,20 @@ var Module = (() => {
         for (let i = 0; i < size; i++) result.push(f(vec.get(i)));
         return result;
       }
+      function vec2polygons(vec, f = (x) => x) {
+        const result = [];
+        const nPoly = vec.size();
+        for (let i = 0; i < nPoly; i++) {
+          const v = vec.get(i);
+          const nPts = v.size();
+          const poly = [];
+          for (let j = 0; j < nPts; j++) {
+            poly.push(f(v.get(j)));
+          }
+          result.push(poly);
+        }
+        return result;
+      }
       function polygons2vec(polygons) {
         if (polygons[0].length < 3) {
           polygons = [polygons];
@@ -42,13 +56,134 @@ var Module = (() => {
           polygonsVec.get(i).delete();
         polygonsVec.delete();
       }
-      function vararg2vec(vec) {
+      function vararg2vec2(vec) {
+        if (vec[0] instanceof Array) return { x: vec[0][0], y: vec[0][1] };
+        if (typeof vec[0] == "number")
+          return { x: vec[0] || 0, y: vec[1] || 0 };
+        return vec[0];
+      }
+      function vararg2vec3(vec) {
         if (vec[0] instanceof Array)
           return { x: vec[0][0], y: vec[0][1], z: vec[0][2] };
         if (typeof vec[0] == "number")
           return { x: vec[0] || 0, y: vec[1] || 0, z: vec[2] || 0 };
         return vec[0];
       }
+      function fillRuleToInt(fillRule) {
+        return fillRule == "EvenOdd"
+          ? 0
+          : fillRule == "NonZero"
+          ? 1
+          : fillRule == "Negative"
+          ? 3
+          : 2;
+      }
+      function joinTypeToInt(joinType) {
+        return joinType == "Round" ? 1 : joinType == "Miter" ? 2 : 0;
+      }
+      const CrossSectionCtor = Module.CrossSection;
+      function cross(polygons, fillRule = "Positive") {
+        if (polygons instanceof CrossSectionCtor) {
+          return polygons;
+        } else {
+          const polygonsVec = polygons2vec(polygons);
+          const cs = new CrossSectionCtor(polygonsVec, fillRuleToInt(fillRule));
+          disposePolygons(polygonsVec);
+          return cs;
+        }
+      }
+      Module.CrossSection.prototype.translate = function (...vec) {
+        return this._Translate(vararg2vec2(vec));
+      };
+      Module.CrossSection.prototype.rotate = function (vec) {
+        return this._Rotate(...vec);
+      };
+      Module.CrossSection.prototype.scale = function (vec) {
+        if (typeof vec == "number") {
+          return this._Scale({ x: vec, y: vec });
+        }
+        return this._Scale(vararg2vec2([vec]));
+      };
+      Module.CrossSection.prototype.mirror = function (vec) {
+        return this._Mirror(vararg2vec2([vec]));
+      };
+      Module.CrossSection.prototype.warp = function (func) {
+        const wasmFuncPtr = addFunction(function (vec2Ptr) {
+          const x = getValue(vec2Ptr, "float");
+          const y = getValue(vec2Ptr + 4, "float");
+          const vert = [x, y];
+          func(vert);
+          setValue(vec2Ptr, vert[0], "float");
+          setValue(vec2Ptr + 4, vert[1], "float");
+        }, "vi");
+        const out = this._Warp(wasmFuncPtr);
+        removeFunction(wasmFuncPtr);
+        return out;
+      };
+      Module.CrossSection.prototype.decompose = function () {
+        const vec = this._Decompose();
+        const result = fromVec(vec);
+        vec.delete();
+        return result;
+      };
+      Module.CrossSection.prototype.bounds = function () {
+        const result = this._Bounds();
+        return {
+          min: ["x", "y"].map((f) => result.min[f]),
+          max: ["x", "y"].map((f) => result.max[f]),
+        };
+      };
+      Module.CrossSection.prototype.offset = function (
+        delta,
+        joinType = "Square",
+        miterLimit = 2,
+        circularSegments = 0
+      ) {
+        return this._Offset(
+          delta,
+          joinTypeToInt(joinType),
+          miterLimit,
+          circularSegments
+        );
+      };
+      Module.CrossSection.prototype.extrude = function (
+        height,
+        nDivisions = 0,
+        twistDegrees = 0,
+        scaleTop = [1, 1],
+        center = false
+      ) {
+        scaleTop = vararg2vec2([scaleTop]);
+        const man = Module._Extrude(
+          this,
+          height,
+          nDivisions,
+          twistDegrees,
+          scaleTop
+        );
+        return center ? man.translate([0, 0, -height / 2]) : man;
+      };
+      Module.CrossSection.prototype.revolve = function (
+        circularSegments = 0,
+        revolveDegrees = 360
+      ) {
+        return Module._Revolve(this, circularSegments, revolveDegrees);
+      };
+      Module.CrossSection.prototype.add = function (other) {
+        return this._add(cross(other));
+      };
+      Module.CrossSection.prototype.subtract = function (other) {
+        return this._subtract(cross(other));
+      };
+      Module.CrossSection.prototype.intersect = function (other) {
+        return this._intersect(cross(other));
+      };
+      Module.CrossSection.prototype.toPolygons = function () {
+        const vec = this._ToPolygons();
+        const result = vec2polygons(vec);
+        vec.delete();
+        return result;
+      };
       Module.Manifold.prototype.warp = function (func) {
         const wasmFuncPtr = addFunction(function (vec3Ptr) {
           const x = getValue(vec3Ptr, "float");
@@ -69,7 +204,7 @@ var Module = (() => {
         return out;
       };
       Module.Manifold.prototype.setProperties = function (numProp, func) {
-        const oldNumProp = this.numProp;
+        const oldNumProp = this.numProp();
         const wasmFuncPtr = addFunction(function (newPtr, vec3Ptr, oldPtr) {
           const newProp = [];
           for (let i = 0; i < numProp; ++i) {
@@ -93,7 +228,7 @@ var Module = (() => {
         return out;
       };
       Module.Manifold.prototype.translate = function (...vec) {
-        return this._Translate(vararg2vec(vec));
+        return this._Translate(vararg2vec3(vec));
       };
       Module.Manifold.prototype.rotate = function (vec) {
         return this._Rotate(...vec);
@@ -102,13 +237,25 @@ var Module = (() => {
         if (typeof vec == "number") {
           return this._Scale({ x: vec, y: vec, z: vec });
         }
-        return this._Scale(vararg2vec([vec]));
+        return this._Scale(vararg2vec3([vec]));
       };
       Module.Manifold.prototype.mirror = function (vec) {
-        return this._Mirror(vararg2vec([vec]));
+        return this._Mirror(vararg2vec3([vec]));
       };
-      Module.Manifold.prototype.trimByPlane = function (normal, offset) {
-        return this._TrimByPlane(vararg2vec([normal]), offset);
+      Module.Manifold.prototype.trimByPlane = function (normal, offset = 0) {
+        return this._TrimByPlane(vararg2vec3([normal]), offset);
+      };
+      Module.Manifold.prototype.split = function (manifold) {
+        const vec = this._split(manifold);
+        const result = fromVec(vec);
+        vec.delete();
+        return result;
+      };
+      Module.Manifold.prototype.splitByPlane = function (normal, offset = 0) {
+        const vec = this._splitByPlane(vararg2vec3([normal]), offset);
+        const result = fromVec(vec);
+        vec.delete();
+        return result;
       };
       Module.Manifold.prototype.decompose = function () {
         const vec = this._Decompose();
@@ -116,15 +263,12 @@ var Module = (() => {
         vec.delete();
         return result;
       };
-      Module.Manifold.prototype.getCurvature = function () {
-        const result = this._getCurvature();
-        const oldMeanCurvature = result.vertMeanCurvature;
-        const oldGaussianCurvature = result.vertGaussianCurvature;
-        result.vertMeanCurvature = fromVec(oldMeanCurvature);
-        result.vertGaussianCurvature = fromVec(oldGaussianCurvature);
-        oldMeanCurvature.delete();
-        oldGaussianCurvature.delete();
-        return result;
+      Module.Manifold.prototype.boundingBox = function () {
+        const result = this._boundingBox();
+        return {
+          min: ["x", "y", "z"].map((f) => result.min[f]),
+          max: ["x", "y", "z"].map((f) => result.max[f]),
+        };
       };
       class Mesh {
         constructor({
@@ -202,13 +346,6 @@ var Module = (() => {
           normalIdx = { 0: normalIdx[0], 1: normalIdx[1], 2: normalIdx[2] };
         return new Mesh(this._GetMeshJS(normalIdx));
       };
-      Module.Manifold.prototype.boundingBox = function () {
-        const result = this._boundingBox();
-        return {
-          min: ["x", "y", "z"].map((f) => result.min[f]),
-          max: ["x", "y", "z"].map((f) => result.max[f]),
-        };
-      };
       Module.ManifoldError = function ManifoldError(code, ...args) {
         let message = "Unknown error";
         switch (code) {
@@ -257,6 +394,49 @@ var Module = (() => {
           configurable: true,
         },
       });
+      Module.CrossSection = function (polygons, fillRule = "Positive") {
+        const polygonsVec = polygons2vec(polygons);
+        const cs = new CrossSectionCtor(polygonsVec, fillRuleToInt(fillRule));
+        disposePolygons(polygonsVec);
+        return cs;
+      };
+      Module.CrossSection.ofPolygons = function (
+        polygons,
+        fillRule = "Positive"
+      ) {
+        return new Module.CrossSection(polygons, fillRule);
+      };
+      Module.CrossSection.square = function (...args) {
+        let size = undefined;
+        if (args.length == 0) size = { x: 1, y: 1 };
+        else if (typeof args[0] == "number") size = { x: args[0], y: args[0] };
+        else size = vararg2vec2(args);
+        const center = args[1] || false;
+        return Module._Square(size, center);
+      };
+      Module.CrossSection.circle = function (radius, circularSegments = 0) {
+        return Module._Circle(radius, circularSegments);
+      };
+      function crossSectionBatchbool(name) {
+        return function (...args) {
+          if (args.length == 1) args = args[0];
+          const v = new Module.Vector_crossSection();
+          for (const cs of args) v.push_back(cross(cs));
+          const result = Module["_crossSection" + name](v);
+          v.delete();
+          return result;
+        };
+      }
+      Module.CrossSection.compose = crossSectionBatchbool("Compose");
+      Module.CrossSection.union = crossSectionBatchbool("UnionN");
+      Module.CrossSection.difference = crossSectionBatchbool("DifferenceN");
+      Module.CrossSection.intersection = crossSectionBatchbool("IntersectionN");
+      Module.CrossSection.prototype = Object.create(CrossSectionCtor.prototype);
+      Object.defineProperty(Module.CrossSection, Symbol.hasInstance, {
+        get: () => (t) => {
+          return t instanceof CrossSectionCtor;
+        },
+      });
       const ManifoldCtor = Module.Manifold;
       Module.Manifold = function (mesh) {
         const manifold = new ManifoldCtor(mesh);
@@ -266,17 +446,22 @@ var Module = (() => {
         }
         return manifold;
       };
-      Module.Manifold.prototype = Object.create(ManifoldCtor.prototype);
-      Module.cube = function (...args) {
+      Module.Manifold.ofMesh = function (mesh) {
+        return new Module.Manifold(mesh);
+      };
+      Module.Manifold.tetrahedron = function () {
+        return Module._Tetrahedron();
+      };
+      Module.Manifold.cube = function (...args) {
         let size = undefined;
         if (args.length == 0) size = { x: 1, y: 1, z: 1 };
         else if (typeof args[0] == "number")
           size = { x: args[0], y: args[0], z: args[0] };
-        else size = vararg2vec(args);
+        else size = vararg2vec3(args);
         const center = args[1] || false;
         return Module._Cube(size, center);
       };
-      Module.cylinder = function (
+      Module.Manifold.cylinder = function (
         height,
         radiusLow,
         radiusHigh = -1,
@@ -291,59 +476,65 @@ var Module = (() => {
           center
         );
       };
-      Module.sphere = function (radius, circularSegments = 0) {
+      Module.Manifold.sphere = function (radius, circularSegments = 0) {
         return Module._Sphere(radius, circularSegments);
       };
-      Module.smooth = function (mesh, sharpenedEdges = []) {
+      Module.Manifold.smooth = function (mesh, sharpenedEdges = []) {
         const sharp = new Module.Vector_smoothness();
         toVec(sharp, sharpenedEdges);
         const result = Module._Smooth(mesh, sharp);
         sharp.delete();
         return result;
       };
-      Module.extrude = function (
+      Module.Manifold.extrude = function (
         polygons,
         height,
         nDivisions = 0,
         twistDegrees = 0,
-        scaleTop = [1, 1]
+        scaleTop = [1, 1],
+        center = false
       ) {
-        if (scaleTop instanceof Array)
-          scaleTop = { x: scaleTop[0], y: scaleTop[1] };
-        const polygonsVec = polygons2vec(polygons);
-        const result = Module._Extrude(
-          polygonsVec,
-          height,
-          nDivisions,
-          twistDegrees,
-          scaleTop
-        );
-        disposePolygons(polygonsVec);
-        return result;
+        const cs =
+          polygons instanceof CrossSectionCtor
+            ? polygons
+            : Module.CrossSection(polygons, "Positive");
+        return cs.extrude(height, nDivisions, twistDegrees, scaleTop, center);
       };
-      Module.triangulate = function (polygons, precision = -1) {
-        const polygonsVec = polygons2vec(polygons);
-        const result = fromVec(
-          Module._Triangulate(polygonsVec, precision),
-          (x) => [x[0], x[1], x[2]]
-        );
-        disposePolygons(polygonsVec);
-        return result;
+      Module.Manifold.revolve = function (
+        polygons,
+        circularSegments = 0,
+        revolveDegrees = 360
+      ) {
+        const cs =
+          polygons instanceof CrossSectionCtor
+            ? polygons
+            : Module.CrossSection(polygons, "Positive");
+        return cs.revolve(circularSegments, revolveDegrees);
       };
-      Module.revolve = function (polygons, circularSegments = 0) {
-        const polygonsVec = polygons2vec(polygons);
-        const result = Module._Revolve(polygonsVec, circularSegments);
-        disposePolygons(polygonsVec);
-        return result;
+      Module.Manifold.reserveIDs = function (n) {
+        return Module._ReserveIDs(n);
       };
-      Module.compose = function (manifolds) {
+      Module.Manifold.compose = function (manifolds) {
         const vec = new Module.Vector_manifold();
         toVec(vec, manifolds);
-        const result = Module._Compose(vec);
+        const result = Module._manifoldCompose(vec);
         vec.delete();
         return result;
       };
-      Module.levelSet = function (sdf, bounds, edgeLength, level = 0) {
+      function manifoldBatchbool(name) {
+        return function (...args) {
+          if (args.length == 1) args = args[0];
+          const v = new Module.Vector_manifold();
+          for (const m of args) v.push_back(m);
+          const result = Module["_manifold" + name + "N"](v);
+          v.delete();
+          return result;
+        };
+      }
+      Module.Manifold.union = manifoldBatchbool("Union");
+      Module.Manifold.difference = manifoldBatchbool("Difference");
+      Module.Manifold.intersection = manifoldBatchbool("Intersection");
+      Module.Manifold.levelSet = function (sdf, bounds, edgeLength, level = 0) {
         const bounds2 = {
           min: { x: bounds.min[0], y: bounds.min[1], z: bounds.min[2] },
           max: { x: bounds.max[0], y: bounds.max[1], z: bounds.max[2] },
@@ -359,19 +550,21 @@ var Module = (() => {
         removeFunction(wasmFuncPtr);
         return out;
       };
-      function batchbool(name) {
-        return function (...args) {
-          if (args.length == 1) args = args[0];
-          const v = new Module.Vector_manifold();
-          for (const m of args) v.push_back(m);
-          const result = Module["_" + name + "N"](v);
-          v.delete();
-          return result;
-        };
-      }
-      Module.union = batchbool("union");
-      Module.difference = batchbool("difference");
-      Module.intersection = batchbool("intersection");
+      Module.Manifold.prototype = Object.create(ManifoldCtor.prototype);
+      Object.defineProperty(Module.Manifold, Symbol.hasInstance, {
+        get: () => (t) => {
+          return t instanceof ManifoldCtor;
+        },
+      });
+      Module.triangulate = function (polygons, precision = -1) {
+        const polygonsVec = polygons2vec(polygons);
+        const result = fromVec(
+          Module._Triangulate(polygonsVec, precision),
+          (x) => [x[0], x[1], x[2]]
+        );
+        disposePolygons(polygonsVec);
+        return result;
+      };
     };
     var moduleOverrides = Object.assign({}, Module);
     var arguments_ = [];
@@ -447,7 +640,7 @@ var Module = (() => {
     } else {
     }
     var out = Module["print"] || console.log.bind(console);
-    var err = Module["printErr"] || console.warn.bind(console);
+    var err = Module["printErr"] || console.error.bind(console);
     Object.assign(Module, moduleOverrides);
     moduleOverrides = null;
     if (Module["arguments"]) arguments_ = Module["arguments"];
@@ -589,42 +782,36 @@ var Module = (() => {
       if (!wasmBinary && (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER)) {
         if (typeof fetch == "function" && !isFileURI(binaryFile)) {
           return fetch(binaryFile, { credentials: "same-origin" })
-            .then(function (response) {
+            .then((response) => {
               if (!response["ok"]) {
                 throw "failed to load wasm binary file at '" + binaryFile + "'";
               }
               return response["arrayBuffer"]();
             })
-            .catch(function () {
-              return getBinary(binaryFile);
-            });
+            .catch(() => getBinary(binaryFile));
         } else {
           if (readAsync) {
-            return new Promise(function (resolve, reject) {
+            return new Promise((resolve, reject) => {
               readAsync(
                 binaryFile,
-                function (response) {
-                  resolve(new Uint8Array(response));
-                },
+                (response) => resolve(new Uint8Array(response)),
                 reject
               );
             });
           }
         }
       }
-      return Promise.resolve().then(function () {
-        return getBinary(binaryFile);
-      });
+      return Promise.resolve().then(() => getBinary(binaryFile));
     }
     function instantiateArrayBuffer(binaryFile, imports, receiver) {
       return getBinaryPromise(binaryFile)
-        .then(function (binary) {
+        .then((binary) => {
           return WebAssembly.instantiate(binary, imports);
         })
-        .then(function (instance) {
+        .then((instance) => {
           return instance;
         })
-        .then(receiver, function (reason) {
+        .then(receiver, (reason) => {
           err("failed to asynchronously prepare wasm: " + reason);
           abort(reason);
         });
@@ -638,16 +825,16 @@ var Module = (() => {
         !ENVIRONMENT_IS_NODE &&
         typeof fetch == "function"
       ) {
-        return fetch(binaryFile, { credentials: "same-origin" }).then(function (
-          response
-        ) {
-          var result = WebAssembly.instantiateStreaming(response, imports);
-          return result.then(callback, function (reason) {
-            err("wasm streaming compile failed: " + reason);
-            err("falling back to ArrayBuffer instantiation");
-            return instantiateArrayBuffer(binaryFile, imports, callback);
-          });
-        });
+        return fetch(binaryFile, { credentials: "same-origin" }).then(
+          (response) => {
+            var result = WebAssembly.instantiateStreaming(response, imports);
+            return result.then(callback, function (reason) {
+              err("wasm streaming compile failed: " + reason);
+              err("falling back to ArrayBuffer instantiation");
+              return instantiateArrayBuffer(binaryFile, imports, callback);
+            });
+          }
+        );
       } else {
         return instantiateArrayBuffer(binaryFile, imports, callback);
       }
@@ -657,10 +844,10 @@ var Module = (() => {
       function receiveInstance(instance, module) {
         var exports = instance.exports;
         Module["asm"] = exports;
-        wasmMemory = Module["asm"]["ka"];
+        wasmMemory = Module["asm"]["ma"];
         updateMemoryViews();
-        wasmTable = Module["asm"]["pa"];
-        addOnInit(Module["asm"]["la"]);
+        wasmTable = Module["asm"]["qa"];
+        addOnInit(Module["asm"]["na"]);
         removeRunDependency("wasm-instantiate");
         return exports;
       }
@@ -684,13 +871,11 @@ var Module = (() => {
       ).catch(readyPromiseReject);
       return {};
     }
-    var tempDouble;
-    var tempI64;
-    function callRuntimeCallbacks(callbacks) {
+    var callRuntimeCallbacks = (callbacks) => {
       while (callbacks.length > 0) {
         callbacks.shift()(Module);
       }
-    }
+    };
     function getValue(ptr, type = "i8") {
       if (type.endsWith("*")) type = "*";
       switch (type) {
@@ -703,7 +888,7 @@ var Module = (() => {
         case "i32":
           return HEAP32[ptr >> 2];
         case "i64":
-          return HEAP32[ptr >> 2];
+          abort("to do getValue(i64) use WASM_BIGINT");
         case "float":
           return HEAPF32[ptr >> 2];
         case "double":
@@ -711,7 +896,7 @@ var Module = (() => {
         case "*":
           return HEAPU32[ptr >> 2];
         default:
-          abort("invalid type for getValue: " + type);
+          abort(`invalid type for getValue: ${type}`);
       }
     }
     function setValue(ptr, value, type = "i8") {
@@ -730,22 +915,7 @@ var Module = (() => {
           HEAP32[ptr >> 2] = value;
           break;
         case "i64":
-          (tempI64 = [
-            value >>> 0,
-            ((tempDouble = value),
-            +Math.abs(tempDouble) >= 1
-              ? tempDouble > 0
-                ? (Math.min(+Math.floor(tempDouble / 4294967296), 4294967295) |
-                    0) >>>
-                  0
-                : ~~+Math.ceil(
-                    (tempDouble - +(~~tempDouble >>> 0)) / 4294967296
-                  ) >>> 0
-              : 0),
-          ]),
-            (HEAP32[ptr >> 2] = tempI64[0]),
-            (HEAP32[(ptr + 4) >> 2] = tempI64[1]);
-          break;
+          abort("to do setValue(i64) use WASM_BIGINT");
         case "float":
           HEAPF32[ptr >> 2] = value;
           break;
@@ -756,13 +926,10 @@ var Module = (() => {
           HEAPU32[ptr >> 2] = value;
           break;
         default:
-          abort("invalid type for setValue: " + type);
+          abort(`invalid type for setValue: ${type}`);
       }
     }
     var exceptionCaught = [];
-    function exception_addRef(info) {
-      info.add_ref();
-    }
     var uncaughtExceptionCount = 0;
     function ___cxa_begin_catch(ptr) {
       var info = new ExceptionInfo(ptr);
@@ -772,33 +939,14 @@ var Module = (() => {
       }
       info.set_rethrown(false);
       exceptionCaught.push(info);
-      exception_addRef(info);
+      ___cxa_increment_exception_refcount(info.excPtr);
       return info.get_exception_ptr();
     }
     var exceptionLast = 0;
-    var wasmTableMirror = [];
-    function getWasmTableEntry(funcPtr) {
-      var func = wasmTableMirror[funcPtr];
-      if (!func) {
-        if (funcPtr >= wasmTableMirror.length)
-          wasmTableMirror.length = funcPtr + 1;
-        wasmTableMirror[funcPtr] = func = wasmTable.get(funcPtr);
-      }
-      return func;
-    }
-    function exception_decRef(info) {
-      if (info.release_ref() && !info.get_rethrown()) {
-        var destructor = info.get_destructor();
-        if (destructor) {
-          getWasmTableEntry(destructor)(info.excPtr);
-        }
-        ___cxa_free_exception(info.excPtr);
-      }
-    }
     function ___cxa_end_catch() {
       _setThrew(0);
       var info = exceptionCaught.pop();
-      exception_decRef(info);
+      ___cxa_decrement_exception_refcount(info.excPtr);
       exceptionLast = 0;
     }
     function ExceptionInfo(excPtr) {
@@ -815,9 +963,6 @@ var Module = (() => {
       };
       this.get_destructor = function () {
         return HEAPU32[(this.ptr + 8) >> 2];
-      };
-      this.set_refcount = function (refcount) {
-        HEAP32[this.ptr >> 2] = refcount;
       };
       this.set_caught = function (caught) {
         caught = caught ? 1 : 0;
@@ -837,18 +982,6 @@ var Module = (() => {
         this.set_adjusted_ptr(0);
         this.set_type(type);
         this.set_destructor(destructor);
-        this.set_refcount(0);
-        this.set_caught(false);
-        this.set_rethrown(false);
-      };
-      this.add_ref = function () {
-        var value = HEAP32[this.ptr >> 2];
-        HEAP32[this.ptr >> 2] = value + 1;
-      };
-      this.release_ref = function () {
-        var prev = HEAP32[this.ptr >> 2];
-        HEAP32[this.ptr >> 2] = prev - 1;
-        return prev === 1;
       };
       this.set_adjusted_ptr = function (adjustedPtr) {
         HEAPU32[(this.ptr + 16) >> 2] = adjustedPtr;
@@ -901,21 +1034,6 @@ var Module = (() => {
     }
     var ___cxa_find_matching_catch_2 = ___cxa_find_matching_catch;
     var ___cxa_find_matching_catch_3 = ___cxa_find_matching_catch;
-    function ___cxa_rethrow() {
-      var info = exceptionCaught.pop();
-      if (!info) {
-        abort("no exception to throw");
-      }
-      var ptr = info.excPtr;
-      if (!info.get_rethrown()) {
-        exceptionCaught.push(info);
-        info.set_rethrown(true);
-        info.set_caught(false);
-        uncaughtExceptionCount++;
-      }
-      exceptionLast = ptr;
-      throw exceptionLast;
-    }
     function ___cxa_throw(ptr, type, destructor) {
       var info = new ExceptionInfo(ptr);
       info.init(type, destructor);
@@ -946,7 +1064,7 @@ var Module = (() => {
       name = name.replace(/[^a-zA-Z0-9_]/g, "$");
       var f = name.charCodeAt(0);
       if (f >= char_0 && f <= char_9) {
-        return "_" + name;
+        return `_${name}`;
       }
       return name;
     }
@@ -974,7 +1092,7 @@ var Module = (() => {
         if (this.message === undefined) {
           return this.name;
         } else {
-          return this.name + ": " + this.message;
+          return `${this.name}: ${this.message}`;
         }
       };
       return errorClass;
@@ -1024,7 +1142,7 @@ var Module = (() => {
         onComplete(typeConverters);
       }
     }
-    function __embind_finalize_value_object(structType) {
+    var __embind_finalize_value_object = function (structType) {
       var reg = structRegistrations[structType];
       delete structRegistrations[structType];
       var rawConstructor = reg.rawConstructor;
@@ -1074,7 +1192,7 @@ var Module = (() => {
             toWireType: function (destructors, o) {
               for (var fieldName in fields) {
                 if (!(fieldName in o)) {
-                  throw new TypeError('Missing field:  "' + fieldName + '"');
+                  throw new TypeError(`Missing field: "${fieldName}"`);
                 }
               }
               var ptr = rawConstructor();
@@ -1092,7 +1210,7 @@ var Module = (() => {
           },
         ];
       });
-    }
+    };
     function __embind_register_bigint(
       primitiveType,
       name,
@@ -1111,7 +1229,7 @@ var Module = (() => {
         case 8:
           return 3;
         default:
-          throw new TypeError("Unknown type size: " + size);
+          throw new TypeError(`Unknown type size: ${size}`);
       }
     }
     function embind_init_charCodes() {
@@ -1143,14 +1261,14 @@ var Module = (() => {
       var name = registeredInstance.name;
       if (!rawType) {
         throwBindingError(
-          'type "' + name + '" must have a positive integer typeid pointer'
+          `type "${name}" must have a positive integer typeid pointer`
         );
       }
       if (registeredTypes.hasOwnProperty(rawType)) {
         if (options.ignoreDuplicateRegistrations) {
           return;
         } else {
-          throwBindingError("Cannot register type '" + name + "' twice");
+          throwBindingError(`Cannot register type '${name}' twice`);
         }
       }
       registeredTypes[rawType] = registeredInstance;
@@ -1394,7 +1512,7 @@ var Module = (() => {
         });
       }
     }
-    function attachFinalizer(handle) {
+    var attachFinalizer = function (handle) {
       if ("undefined" === typeof FinalizationRegistry) {
         attachFinalizer = (handle) => handle;
         return handle;
@@ -1413,7 +1531,7 @@ var Module = (() => {
       };
       detachFinalizer = (handle) => finalizationRegistry.unregister(handle);
       return attachFinalizer(handle);
-    }
+    };
     function ClassHandle_clone() {
       if (!this.$$.ptr) {
         throwInstanceAlreadyDeleted(this);
@@ -1479,13 +1597,7 @@ var Module = (() => {
             !proto[methodName].overloadTable.hasOwnProperty(arguments.length)
           ) {
             throwBindingError(
-              "Function '" +
-                humanName +
-                "' called with an invalid number of arguments (" +
-                arguments.length +
-                ") - expects one of (" +
-                proto[methodName].overloadTable +
-                ")!"
+              `Function '${humanName}' called with an invalid number of arguments (${arguments.length}) - expects one of (${proto[methodName].overloadTable})!`
             );
           }
           return proto[methodName].overloadTable[arguments.length].apply(
@@ -1504,14 +1616,12 @@ var Module = (() => {
           (undefined !== Module[name].overloadTable &&
             undefined !== Module[name].overloadTable[numArguments])
         ) {
-          throwBindingError("Cannot register public name '" + name + "' twice");
+          throwBindingError(`Cannot register public name '${name}' twice`);
         }
         ensureOverloadTable(Module, name, name);
         if (Module.hasOwnProperty(numArguments)) {
           throwBindingError(
-            "Cannot register multiple overloads of a function with the same number of arguments (" +
-              numArguments +
-              ")!"
+            `Cannot register multiple overloads of a function with the same number of arguments (${numArguments})!`
           );
         }
         Module[name].overloadTable[numArguments] = value;
@@ -1546,10 +1656,7 @@ var Module = (() => {
       while (ptrClass !== desiredClass) {
         if (!ptrClass.upcast) {
           throwBindingError(
-            "Expected null or instance of " +
-              desiredClass.name +
-              ", got an instance of " +
-              ptrClass.name
+            `Expected null or instance of ${desiredClass.name}, got an instance of ${ptrClass.name}`
           );
         }
         ptr = ptrClass.upcast(ptr);
@@ -1560,18 +1667,18 @@ var Module = (() => {
     function constNoSmartPtrRawPointerToWireType(destructors, handle) {
       if (handle === null) {
         if (this.isReference) {
-          throwBindingError("null is not a valid " + this.name);
+          throwBindingError(`null is not a valid ${this.name}`);
         }
         return 0;
       }
       if (!handle.$$) {
         throwBindingError(
-          'Cannot pass "' + embindRepr(handle) + '" as a ' + this.name
+          `Cannot pass "${embindRepr(handle)}" as a ${this.name}`
         );
       }
       if (!handle.$$.ptr) {
         throwBindingError(
-          "Cannot pass deleted object as a pointer of type " + this.name
+          `Cannot pass deleted object as a pointer of type ${this.name}`
         );
       }
       var handleClass = handle.$$.ptrType.registeredClass;
@@ -1582,7 +1689,7 @@ var Module = (() => {
       var ptr;
       if (handle === null) {
         if (this.isReference) {
-          throwBindingError("null is not a valid " + this.name);
+          throwBindingError(`null is not a valid ${this.name}`);
         }
         if (this.isSmartPointer) {
           ptr = this.rawConstructor();
@@ -1596,22 +1703,21 @@ var Module = (() => {
       }
       if (!handle.$$) {
         throwBindingError(
-          'Cannot pass "' + embindRepr(handle) + '" as a ' + this.name
+          `Cannot pass "${embindRepr(handle)}" as a ${this.name}`
         );
       }
       if (!handle.$$.ptr) {
         throwBindingError(
-          "Cannot pass deleted object as a pointer of type " + this.name
+          `Cannot pass deleted object as a pointer of type ${this.name}`
         );
       }
       if (!this.isConst && handle.$$.ptrType.isConst) {
         throwBindingError(
-          "Cannot convert argument of type " +
-            (handle.$$.smartPtrType
+          `Cannot convert argument of type ${
+            handle.$$.smartPtrType
               ? handle.$$.smartPtrType.name
-              : handle.$$.ptrType.name) +
-            " to parameter type " +
-            this.name
+              : handle.$$.ptrType.name
+          } to parameter type ${this.name}`
         );
       }
       var handleClass = handle.$$.ptrType.registeredClass;
@@ -1626,12 +1732,11 @@ var Module = (() => {
               ptr = handle.$$.smartPtr;
             } else {
               throwBindingError(
-                "Cannot convert argument of type " +
-                  (handle.$$.smartPtrType
+                `Cannot convert argument of type ${
+                  handle.$$.smartPtrType
                     ? handle.$$.smartPtrType.name
-                    : handle.$$.ptrType.name) +
-                  " to parameter type " +
-                  this.name
+                    : handle.$$.ptrType.name
+                } to parameter type ${this.name}`
               );
             }
             break;
@@ -1663,26 +1768,23 @@ var Module = (() => {
     function nonConstNoSmartPtrRawPointerToWireType(destructors, handle) {
       if (handle === null) {
         if (this.isReference) {
-          throwBindingError("null is not a valid " + this.name);
+          throwBindingError(`null is not a valid ${this.name}`);
         }
         return 0;
       }
       if (!handle.$$) {
         throwBindingError(
-          'Cannot pass "' + embindRepr(handle) + '" as a ' + this.name
+          `Cannot pass "${embindRepr(handle)}" as a ${this.name}`
         );
       }
       if (!handle.$$.ptr) {
         throwBindingError(
-          "Cannot pass deleted object as a pointer of type " + this.name
+          `Cannot pass deleted object as a pointer of type ${this.name}`
         );
       }
       if (handle.$$.ptrType.isConst) {
         throwBindingError(
-          "Cannot convert argument of type " +
-            handle.$$.ptrType.name +
-            " to parameter type " +
-            this.name
+          `Cannot convert argument of type ${handle.$$.ptrType.name} to parameter type ${this.name}`
         );
       }
       var handleClass = handle.$$.ptrType.registeredClass;
@@ -1766,27 +1868,37 @@ var Module = (() => {
         Module[name].argCount = numArguments;
       }
     }
-    function dynCallLegacy(sig, ptr, args) {
+    var dynCallLegacy = (sig, ptr, args) => {
       var f = Module["dynCall_" + sig];
       return args && args.length
         ? f.apply(null, [ptr].concat(args))
         : f.call(null, ptr);
-    }
-    function dynCall(sig, ptr, args) {
+    };
+    var wasmTableMirror = [];
+    var getWasmTableEntry = (funcPtr) => {
+      var func = wasmTableMirror[funcPtr];
+      if (!func) {
+        if (funcPtr >= wasmTableMirror.length)
+          wasmTableMirror.length = funcPtr + 1;
+        wasmTableMirror[funcPtr] = func = wasmTable.get(funcPtr);
+      }
+      return func;
+    };
+    var dynCall = (sig, ptr, args) => {
       if (sig.includes("j")) {
         return dynCallLegacy(sig, ptr, args);
       }
       var rtn = getWasmTableEntry(ptr).apply(null, args);
       return rtn;
-    }
-    function getDynCaller(sig, ptr) {
+    };
+    var getDynCaller = (sig, ptr) => {
       var argCache = [];
       return function () {
         argCache.length = 0;
         Object.assign(argCache, arguments);
         return dynCall(sig, ptr, argCache);
       };
-    }
+    };
     function embind__requireFunction(signature, rawFunction) {
       signature = readLatin1String(signature);
       function makeDynCaller() {
@@ -1798,10 +1910,7 @@ var Module = (() => {
       var fp = makeDynCaller();
       if (typeof fp != "function") {
         throwBindingError(
-          "unknown function pointer with signature " +
-            signature +
-            ": " +
-            rawFunction
+          `unknown function pointer with signature ${signature}: ${rawFunction}`
         );
       }
       return fp;
@@ -1832,7 +1941,7 @@ var Module = (() => {
       }
       types.forEach(visit);
       throw new UnboundTypeError(
-        message + ": " + unboundTypes.map(getTypeName).join([", "])
+        `${message}: ` + unboundTypes.map(getTypeName).join([", "])
       );
     }
     function __embind_register_class(
@@ -1867,10 +1976,9 @@ var Module = (() => {
       );
       var legalFunctionName = makeLegalFunctionName(name);
       exposePublicSymbol(legalFunctionName, function () {
-        throwUnboundTypeError(
-          "Cannot construct " + name + " due to unbound types",
-          [baseClassRawType]
-        );
+        throwUnboundTypeError(`Cannot construct ${name} due to unbound types`, [
+          baseClassRawType,
+        ]);
       });
       whenDependentTypesAreResolved(
         [rawType, rawPointerType, rawConstPointerType],
@@ -1895,13 +2003,11 @@ var Module = (() => {
             var body = registeredClass.constructor_body[arguments.length];
             if (undefined === body) {
               throw new BindingError(
-                "Tried to invoke ctor of " +
-                  name +
-                  " with invalid number of parameters (" +
-                  arguments.length +
-                  ") - expected (" +
-                  Object.keys(registeredClass.constructor_body).toString() +
-                  ") parameters instead!"
+                `Tried to invoke ctor of ${name} with invalid number of parameters (${
+                  arguments.length
+                }) - expected (${Object.keys(
+                  registeredClass.constructor_body
+                ).toString()}) parameters instead!`
               );
             }
             return body.apply(this, arguments);
@@ -1920,6 +2026,12 @@ var Module = (() => {
             upcast,
             downcast
           );
+          if (registeredClass.baseClass) {
+            if (registeredClass.baseClass.__derivedClasses === undefined) {
+              registeredClass.baseClass.__derivedClasses = [];
+            }
+            registeredClass.baseClass.__derivedClasses.push(registeredClass);
+          }
           var referenceConverter = new RegisteredPointer(
             name,
             registeredClass,
@@ -1960,9 +2072,7 @@ var Module = (() => {
     function newFunc(constructor, argumentList) {
       if (!(constructor instanceof Function)) {
         throw new TypeError(
-          "new_ called with constructor type " +
-            typeof constructor +
-            " which is not a function"
+          `new_ called with constructor type ${typeof constructor} which is not a function`
         );
       }
       var dummy = createNamedFunction(
@@ -2006,21 +2116,13 @@ var Module = (() => {
         argsList += (i !== 0 ? ", " : "") + "arg" + i;
         argsListWired += (i !== 0 ? ", " : "") + "arg" + i + "Wired";
       }
-      var invokerFnBody =
-        "return function " +
-        makeLegalFunctionName(humanName) +
-        "(" +
-        argsList +
-        ") {\n" +
-        "if (arguments.length !== " +
-        (argCount - 2) +
-        ") {\n" +
-        "throwBindingError('function " +
-        humanName +
-        " called with ' + arguments.length + ' arguments, expected " +
-        (argCount - 2) +
-        " args!');\n" +
-        "}\n";
+      var invokerFnBody = `\n        return function ${makeLegalFunctionName(
+        humanName
+      )}(${argsList}) {\n        if (arguments.length !== ${
+        argCount - 2
+      }) {\n          throwBindingError('function ${humanName} called with ${
+        arguments.length
+      } arguments, expected ${argCount - 2} args!');\n        }`;
       if (needsDestructorStack) {
         invokerFnBody += "var destructors = [];\n";
       }
@@ -2111,7 +2213,7 @@ var Module = (() => {
       invoker = embind__requireFunction(invokerSignature, invoker);
       whenDependentTypesAreResolved([], [rawClassType], function (classType) {
         classType = classType[0];
-        var humanName = "constructor " + classType.name;
+        var humanName = `constructor ${classType.name}`;
         if (undefined === classType.registeredClass.constructor_body) {
           classType.registeredClass.constructor_body = [];
         }
@@ -2119,16 +2221,16 @@ var Module = (() => {
           undefined !== classType.registeredClass.constructor_body[argCount - 1]
         ) {
           throw new BindingError(
-            "Cannot register multiple constructors with identical number of parameters (" +
-              (argCount - 1) +
-              ") for class '" +
-              classType.name +
-              "'! Overload resolution is currently only performed using the parameter count, not actual type info!"
+            `Cannot register multiple constructors with identical number of parameters (${
+              argCount - 1
+            }) for class '${
+              classType.name
+            }'! Overload resolution is currently only performed using the parameter count, not actual type info!`
           );
         }
         classType.registeredClass.constructor_body[argCount - 1] = () => {
           throwUnboundTypeError(
-            "Cannot construct " + classType.name + " due to unbound types",
+            `Cannot construct ${classType.name} due to unbound types`,
             rawArgTypes
           );
         };
@@ -2163,7 +2265,7 @@ var Module = (() => {
       rawInvoker = embind__requireFunction(invokerSignature, rawInvoker);
       whenDependentTypesAreResolved([], [rawClassType], function (classType) {
         classType = classType[0];
-        var humanName = classType.name + "." + methodName;
+        var humanName = `${classType.name}.${methodName}`;
         if (methodName.startsWith("@@")) {
           methodName = Symbol[methodName.substring(2)];
         }
@@ -2172,7 +2274,7 @@ var Module = (() => {
         }
         function unboundTypesHandler() {
           throwUnboundTypeError(
-            "Cannot call " + humanName + " due to unbound types",
+            `Cannot call ${humanName} due to unbound types`,
             rawArgTypes
           );
         }
@@ -2217,8 +2319,11 @@ var Module = (() => {
       this.get = function (id) {
         return this.allocated[id];
       };
+      this.has = function (id) {
+        return this.allocated[id] !== undefined;
+      };
       this.allocate = function (handle) {
-        let id = this.freelist.pop() || this.allocated.length;
+        var id = this.freelist.pop() || this.allocated.length;
         this.allocated[id] = handle;
         return id;
       };
@@ -2357,7 +2462,7 @@ var Module = (() => {
         value: { value: enumValue },
         constructor: {
           value: createNamedFunction(
-            enumType.name + "_" + name,
+            `${enumType.name}_${name}`,
             function () {}
           ),
         },
@@ -2422,7 +2527,7 @@ var Module = (() => {
         name,
         function () {
           throwUnboundTypeError(
-            "Cannot call " + name + " due to unbound types",
+            `Cannot call ${name} due to unbound types`,
             argTypes
           );
         },
@@ -2550,7 +2655,7 @@ var Module = (() => {
         { ignoreDuplicateRegistrations: true }
       );
     }
-    function stringToUTF8Array(str, heap, outIdx, maxBytesToWrite) {
+    var stringToUTF8Array = (str, heap, outIdx, maxBytesToWrite) => {
       if (!(maxBytesToWrite > 0)) return 0;
       var startIdx = outIdx;
       var endIdx = outIdx + maxBytesToWrite - 1;
@@ -2582,11 +2687,11 @@ var Module = (() => {
       }
       heap[outIdx] = 0;
       return outIdx - startIdx;
-    }
-    function stringToUTF8(str, outPtr, maxBytesToWrite) {
+    };
+    var stringToUTF8 = (str, outPtr, maxBytesToWrite) => {
       return stringToUTF8Array(str, HEAPU8, outPtr, maxBytesToWrite);
-    }
-    function lengthBytesUTF8(str) {
+    };
+    var lengthBytesUTF8 = (str) => {
       var len = 0;
       for (var i = 0; i < str.length; ++i) {
         var c = str.charCodeAt(i);
@@ -2602,10 +2707,10 @@ var Module = (() => {
         }
       }
       return len;
-    }
+    };
     var UTF8Decoder =
       typeof TextDecoder != "undefined" ? new TextDecoder("utf8") : undefined;
-    function UTF8ArrayToString(heapOrArray, idx, maxBytesToRead) {
+    var UTF8ArrayToString = (heapOrArray, idx, maxBytesToRead) => {
       var endIdx = idx + maxBytesToRead;
       var endPtr = idx;
       while (heapOrArray[endPtr] && !(endPtr >= endIdx)) ++endPtr;
@@ -2642,10 +2747,10 @@ var Module = (() => {
         }
       }
       return str;
-    }
-    function UTF8ToString(ptr, maxBytesToRead) {
+    };
+    var UTF8ToString = (ptr, maxBytesToRead) => {
       return ptr ? UTF8ArrayToString(HEAPU8, ptr, maxBytesToRead) : "";
-    }
+    };
     function __embind_register_std_string(rawType, name) {
       name = readLatin1String(name);
       var stdStringIsUTF8 = name === "std::string";
@@ -2741,7 +2846,7 @@ var Module = (() => {
       typeof TextDecoder != "undefined"
         ? new TextDecoder("utf-16le")
         : undefined;
-    function UTF16ToString(ptr, maxBytesToRead) {
+    var UTF16ToString = (ptr, maxBytesToRead) => {
       var endPtr = ptr;
       var idx = endPtr >> 1;
       var maxIdx = idx + maxBytesToRead / 2;
@@ -2756,8 +2861,8 @@ var Module = (() => {
         str += String.fromCharCode(codeUnit);
       }
       return str;
-    }
-    function stringToUTF16(str, outPtr, maxBytesToWrite) {
+    };
+    var stringToUTF16 = (str, outPtr, maxBytesToWrite) => {
       if (maxBytesToWrite === undefined) {
         maxBytesToWrite = 2147483647;
       }
@@ -2773,11 +2878,11 @@ var Module = (() => {
       }
       HEAP16[outPtr >> 1] = 0;
       return outPtr - startPtr;
-    }
-    function lengthBytesUTF16(str) {
+    };
+    var lengthBytesUTF16 = (str) => {
       return str.length * 2;
-    }
-    function UTF32ToString(ptr, maxBytesToRead) {
+    };
+    var UTF32ToString = (ptr, maxBytesToRead) => {
       var i = 0;
       var str = "";
       while (!(i >= maxBytesToRead / 4)) {
@@ -2792,8 +2897,8 @@ var Module = (() => {
         }
       }
       return str;
-    }
-    function stringToUTF32(str, outPtr, maxBytesToWrite) {
+    };
+    var stringToUTF32 = (str, outPtr, maxBytesToWrite) => {
       if (maxBytesToWrite === undefined) {
         maxBytesToWrite = 2147483647;
       }
@@ -2813,8 +2918,8 @@ var Module = (() => {
       }
       HEAP32[outPtr >> 2] = 0;
       return outPtr - startPtr;
-    }
-    function lengthBytesUTF32(str) {
+    };
+    var lengthBytesUTF32 = (str) => {
       var len = 0;
       for (var i = 0; i < str.length; ++i) {
         var codeUnit = str.charCodeAt(i);
@@ -2822,8 +2927,8 @@ var Module = (() => {
         len += 4;
       }
       return len;
-    }
-    function __embind_register_std_wstring(rawType, charSize, name) {
+    };
+    var __embind_register_std_wstring = function (rawType, charSize, name) {
       name = readLatin1String(name);
       var decodeString, encodeString, getHeap, lengthBytesUTF, shift;
       if (charSize === 2) {
@@ -2866,7 +2971,7 @@ var Module = (() => {
         toWireType: function (destructors, value) {
           if (!(typeof value == "string")) {
             throwBindingError(
-              "Cannot pass non-string to C++ string type " + name
+              `Cannot pass non-string to C++ string type ${name}`
             );
           }
           var length = lengthBytesUTF(value);
@@ -2884,7 +2989,7 @@ var Module = (() => {
           _free(ptr);
         },
       });
-    }
+    };
     function __embind_register_value_object(
       rawType,
       name,
@@ -3098,31 +3203,29 @@ var Module = (() => {
       var v = type["readValueFromPointer"](arg);
       return Emval.toHandle(v);
     }
-    function _abort() {
+    var _abort = () => {
       abort("");
-    }
-    function _emscripten_memcpy_big(dest, src, num) {
+    };
+    var _emscripten_memcpy_big = (dest, src, num) =>
       HEAPU8.copyWithin(dest, src, src + num);
-    }
-    function getHeapMax() {
-      return 2147483648;
-    }
-    function emscripten_realloc_buffer(size) {
+    var getHeapMax = () => 2147483648;
+    var growMemory = (size) => {
       var b = wasmMemory.buffer;
+      var pages = (size - b.byteLength + 65535) >>> 16;
       try {
-        wasmMemory.grow((size - b.byteLength + 65535) >>> 16);
+        wasmMemory.grow(pages);
         updateMemoryViews();
         return 1;
       } catch (e) {}
-    }
-    function _emscripten_resize_heap(requestedSize) {
+    };
+    var _emscripten_resize_heap = (requestedSize) => {
       var oldSize = HEAPU8.length;
       requestedSize = requestedSize >>> 0;
       var maxHeapSize = getHeapMax();
       if (requestedSize > maxHeapSize) {
         return false;
       }
-      let alignUp = (x, multiple) =>
+      var alignUp = (x, multiple) =>
         x + ((multiple - (x % multiple)) % multiple);
       for (var cutDown = 1; cutDown <= 4; cutDown *= 2) {
         var overGrownHeapSize = oldSize * (1 + 0.2 / cutDown);
@@ -3134,13 +3237,13 @@ var Module = (() => {
           maxHeapSize,
           alignUp(Math.max(requestedSize, overGrownHeapSize), 65536)
         );
-        var replacement = emscripten_realloc_buffer(newSize);
+        var replacement = growMemory(newSize);
         if (replacement) {
           return true;
         }
       }
       return false;
-    }
+    };
     function _llvm_eh_typeid_for(type) {
       return type;
     }
@@ -3152,16 +3255,13 @@ var Module = (() => {
       }
     }
     function sigToWasmTypes(sig) {
-      var typeNames = { i: "i32", j: "i32", f: "f32", d: "f64", p: "i32" };
+      var typeNames = { i: "i32", j: "i64", f: "f32", d: "f64", p: "i32" };
       var type = {
         parameters: [],
         results: sig[0] == "v" ? [] : [typeNames[sig[0]]],
       };
       for (var i = 1; i < sig.length; ++i) {
         type.parameters.push(typeNames[sig[i]]);
-        if (sig[i] === "j") {
-          type.parameters.push("i32");
-        }
       }
       return type;
     }
@@ -3228,10 +3328,10 @@ var Module = (() => {
       }
       return wasmTable.length - 1;
     }
-    function setWasmTableEntry(idx, func) {
+    var setWasmTableEntry = (idx, func) => {
       wasmTable.set(idx, func);
       wasmTableMirror[idx] = wasmTable.get(idx);
-    }
+    };
     function addFunction(func, sig) {
       var rtn = getFunctionAddress(func);
       if (rtn) {
@@ -3269,97 +3369,92 @@ var Module = (() => {
     );
     init_emval();
     var wasmImports = {
-      E: ___cxa_begin_catch,
+      _: ___cxa_begin_catch,
       Z: ___cxa_end_catch,
       a: ___cxa_find_matching_catch_2,
-      j: ___cxa_find_matching_catch_3,
-      _: ___cxa_rethrow,
-      z: ___cxa_throw,
+      l: ___cxa_find_matching_catch_3,
+      x: ___cxa_throw,
       d: ___resumeException,
-      aa: __embind_finalize_value_object,
+      da: __embind_finalize_value_object,
       Q: __embind_register_bigint,
       U: __embind_register_bool,
-      v: __embind_register_class,
-      u: __embind_register_class_constructor,
+      t: __embind_register_class,
+      s: __embind_register_class_constructor,
       h: __embind_register_class_function,
       T: __embind_register_emval,
-      $: __embind_register_enum,
-      r: __embind_register_enum_value,
-      H: __embind_register_float,
-      o: __embind_register_function,
-      t: __embind_register_integer,
-      n: __embind_register_memory_view,
-      G: __embind_register_std_string,
-      C: __embind_register_std_wstring,
-      x: __embind_register_value_object,
-      ba: __embind_register_value_object_field,
+      F: __embind_register_enum,
+      q: __embind_register_enum_value,
+      I: __embind_register_float,
+      m: __embind_register_function,
+      w: __embind_register_integer,
+      p: __embind_register_memory_view,
+      H: __embind_register_std_string,
+      E: __embind_register_std_wstring,
+      y: __embind_register_value_object,
+      ea: __embind_register_value_object_field,
       V: __embind_register_void,
-      fa: __emval_as,
-      O: __emval_call_method,
-      ca: __emval_call_void_method,
-      ha: __emval_decref,
-      ea: __emval_equals,
-      P: __emval_get_method_caller,
-      ga: __emval_get_property,
-      da: __emval_incref,
+      ia: __emval_as,
+      X: __emval_call_method,
+      fa: __emval_call_void_method,
+      ka: __emval_decref,
+      ha: __emval_equals,
+      ca: __emval_get_method_caller,
+      ja: __emval_get_property,
+      ga: __emval_incref,
       A: __emval_new_cstring,
-      J: __emval_new_object,
-      ja: __emval_run_destructors,
-      ia: __emval_set_property,
-      s: __emval_take_value,
-      B: _abort,
+      O: __emval_new_object,
+      P: __emval_run_destructors,
+      la: __emval_set_property,
+      u: __emval_take_value,
+      D: _abort,
       S: _emscripten_memcpy_big,
       R: _emscripten_resize_heap,
-      F: invoke_diii,
-      w: invoke_diiiii,
+      G: invoke_diii,
+      v: invoke_diiiii,
       c: invoke_ii,
       f: invoke_iii,
-      m: invoke_iiii,
-      p: invoke_iiiii,
+      o: invoke_iiii,
+      j: invoke_iiiii,
       M: invoke_iiiiii,
       i: invoke_v,
       b: invoke_vi,
+      aa: invoke_vidi,
       g: invoke_vii,
-      Y: invoke_viiddi,
-      D: invoke_viif,
+      B: invoke_viiddi,
+      N: invoke_viidi,
+      ba: invoke_viidiidid,
+      C: invoke_viif,
       W: invoke_viifff,
-      N: invoke_viififi,
+      Y: invoke_viififi,
       e: invoke_viii,
       k: invoke_viiii,
-      y: invoke_viiiii,
+      z: invoke_viiiii,
       L: invoke_viiiiifi,
-      q: invoke_viiiiii,
-      I: invoke_viiiiiii,
-      l: invoke_viiiiiiiiii,
+      r: invoke_viiiiii,
+      J: invoke_viiiiiii,
+      n: invoke_viiiiiiiiii,
       K: invoke_viiiiiiiiiiii,
-      X: _llvm_eh_typeid_for,
+      $: _llvm_eh_typeid_for,
     };
     var asm = createWasm();
     var ___wasm_call_ctors = function () {
-      return (___wasm_call_ctors = Module["asm"]["la"]).apply(null, arguments);
+      return (___wasm_call_ctors = Module["asm"]["na"]).apply(null, arguments);
     };
     var _malloc = function () {
-      return (_malloc = Module["asm"]["ma"]).apply(null, arguments);
+      return (_malloc = Module["asm"]["oa"]).apply(null, arguments);
     };
     var _free = function () {
-      return (_free = Module["asm"]["na"]).apply(null, arguments);
+      return (_free = Module["asm"]["pa"]).apply(null, arguments);
     };
-    var ___cxa_free_exception = function () {
-      return (___cxa_free_exception = Module["asm"]["oa"]).apply(
-        null,
-        arguments
-      );
+    var ___getTypeName = function () {
+      return (___getTypeName = Module["asm"]["ra"]).apply(null, arguments);
     };
-    var ___getTypeName = (Module["___getTypeName"] = function () {
-      return (___getTypeName = Module["___getTypeName"] =
-        Module["asm"]["qa"]).apply(null, arguments);
-    });
     var __embind_initialize_bindings = (Module["__embind_initialize_bindings"] =
       function () {
         return (__embind_initialize_bindings = Module[
           "__embind_initialize_bindings"
         ] =
-          Module["asm"]["ra"]).apply(null, arguments);
+          Module["asm"]["sa"]).apply(null, arguments);
       });
     var ___errno_location = function () {
       return (___errno_location = Module["asm"]["__errno_location"]).apply(
@@ -3367,44 +3462,39 @@ var Module = (() => {
         arguments
       );
     };
+    var _setThrew = function () {
+      return (_setThrew = Module["asm"]["ta"]).apply(null, arguments);
+    };
     var setTempRet0 = function () {
-      return (setTempRet0 = Module["asm"]["sa"]).apply(null, arguments);
+      return (setTempRet0 = Module["asm"]["ua"]).apply(null, arguments);
     };
     var stackSave = function () {
-      return (stackSave = Module["asm"]["ta"]).apply(null, arguments);
+      return (stackSave = Module["asm"]["va"]).apply(null, arguments);
     };
     var stackRestore = function () {
-      return (stackRestore = Module["asm"]["ua"]).apply(null, arguments);
+      return (stackRestore = Module["asm"]["wa"]).apply(null, arguments);
     };
-    var ___cxa_can_catch = function () {
-      return (___cxa_can_catch = Module["asm"]["va"]).apply(null, arguments);
-    };
-    var ___cxa_is_pointer_type = function () {
-      return (___cxa_is_pointer_type = Module["asm"]["wa"]).apply(
+    var ___cxa_decrement_exception_refcount = function () {
+      return (___cxa_decrement_exception_refcount = Module["asm"]["xa"]).apply(
         null,
         arguments
       );
     };
-    function invoke_vi(index, a1) {
-      var sp = stackSave();
-      try {
-        getWasmTableEntry(index)(a1);
-      } catch (e) {
-        stackRestore(sp);
-        if (e !== e + 0) throw e;
-        _setThrew(1, 0);
-      }
-    }
-    function invoke_ii(index, a1) {
-      var sp = stackSave();
-      try {
-        return getWasmTableEntry(index)(a1);
-      } catch (e) {
-        stackRestore(sp);
-        if (e !== e + 0) throw e;
-        _setThrew(1, 0);
-      }
-    }
+    var ___cxa_increment_exception_refcount = function () {
+      return (___cxa_increment_exception_refcount = Module["asm"]["ya"]).apply(
+        null,
+        arguments
+      );
+    };
+    var ___cxa_can_catch = function () {
+      return (___cxa_can_catch = Module["asm"]["za"]).apply(null, arguments);
+    };
+    var ___cxa_is_pointer_type = function () {
+      return (___cxa_is_pointer_type = Module["asm"]["Aa"]).apply(
+        null,
+        arguments
+      );
+    };
     function invoke_viii(index, a1, a2, a3) {
       var sp = stackSave();
       try {
@@ -3429,6 +3519,26 @@ var Module = (() => {
       var sp = stackSave();
       try {
         return getWasmTableEntry(index)(a1, a2, a3, a4, a5);
+      } catch (e) {
+        stackRestore(sp);
+        if (e !== e + 0) throw e;
+        _setThrew(1, 0);
+      }
+    }
+    function invoke_vi(index, a1) {
+      var sp = stackSave();
+      try {
+        getWasmTableEntry(index)(a1);
+      } catch (e) {
+        stackRestore(sp);
+        if (e !== e + 0) throw e;
+        _setThrew(1, 0);
+      }
+    }
+    function invoke_ii(index, a1) {
+      var sp = stackSave();
+      try {
+        return getWasmTableEntry(index)(a1);
       } catch (e) {
         stackRestore(sp);
         if (e !== e + 0) throw e;
@@ -3469,16 +3579,6 @@ var Module = (() => {
       var sp = stackSave();
       try {
         return getWasmTableEntry(index)(a1, a2, a3);
-      } catch (e) {
-        stackRestore(sp);
-        if (e !== e + 0) throw e;
-        _setThrew(1, 0);
-      }
-    }
-    function invoke_viififi(index, a1, a2, a3, a4, a5, a6) {
-      var sp = stackSave();
-      try {
-        getWasmTableEntry(index)(a1, a2, a3, a4, a5, a6);
       } catch (e) {
         stackRestore(sp);
         if (e !== e + 0) throw e;
@@ -3537,6 +3637,26 @@ var Module = (() => {
         _setThrew(1, 0);
       }
     }
+    function invoke_viidi(index, a1, a2, a3, a4) {
+      var sp = stackSave();
+      try {
+        getWasmTableEntry(index)(a1, a2, a3, a4);
+      } catch (e) {
+        stackRestore(sp);
+        if (e !== e + 0) throw e;
+        _setThrew(1, 0);
+      }
+    }
+    function invoke_viidiidid(index, a1, a2, a3, a4, a5, a6, a7, a8) {
+      var sp = stackSave();
+      try {
+        getWasmTableEntry(index)(a1, a2, a3, a4, a5, a6, a7, a8);
+      } catch (e) {
+        stackRestore(sp);
+        if (e !== e + 0) throw e;
+        _setThrew(1, 0);
+      }
+    }
     function invoke_viiddi(index, a1, a2, a3, a4, a5) {
       var sp = stackSave();
       try {
@@ -3547,10 +3667,30 @@ var Module = (() => {
         _setThrew(1, 0);
       }
     }
+    function invoke_vidi(index, a1, a2, a3) {
+      var sp = stackSave();
+      try {
+        getWasmTableEntry(index)(a1, a2, a3);
+      } catch (e) {
+        stackRestore(sp);
+        if (e !== e + 0) throw e;
+        _setThrew(1, 0);
+      }
+    }
     function invoke_viif(index, a1, a2, a3) {
       var sp = stackSave();
       try {
         getWasmTableEntry(index)(a1, a2, a3);
+      } catch (e) {
+        stackRestore(sp);
+        if (e !== e + 0) throw e;
+        _setThrew(1, 0);
+      }
+    }
+    function invoke_viififi(index, a1, a2, a3, a4, a5, a6) {
+      var sp = stackSave();
+      try {
+        getWasmTableEntry(index)(a1, a2, a3, a4, a5, a6);
       } catch (e) {
         stackRestore(sp);
         if (e !== e + 0) throw e;
@@ -3690,7 +3830,7 @@ var Module = (() => {
     }
     run();
 
-    return Module.ready;
+    return moduleArg.ready;
   };
 })();
 export default Module;
