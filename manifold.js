@@ -639,48 +639,7 @@ var Module = (() => {
     }
     var read_, readAsync, readBinary, setWindowTitle;
     if (ENVIRONMENT_IS_NODE) {
-      const { createRequire: createRequire } = await import("module");
-      var require = createRequire(import.meta.url);
-      var fs = require("fs");
-      var nodePath = require("path");
-      if (ENVIRONMENT_IS_WORKER) {
-        scriptDirectory = nodePath.dirname(scriptDirectory) + "/";
-      } else {
-        scriptDirectory = require("url").fileURLToPath(
-          new URL("./", import.meta.url)
-        );
-      }
-      read_ = (filename, binary) => {
-        filename = isFileURI(filename)
-          ? new URL(filename)
-          : nodePath.normalize(filename);
-        return fs.readFileSync(filename, binary ? undefined : "utf8");
-      };
-      readBinary = (filename) => {
-        var ret = read_(filename, true);
-        if (!ret.buffer) {
-          ret = new Uint8Array(ret);
-        }
-        return ret;
-      };
-      readAsync = (filename, onload, onerror, binary = true) => {
-        filename = isFileURI(filename)
-          ? new URL(filename)
-          : nodePath.normalize(filename);
-        fs.readFile(filename, binary ? undefined : "utf8", (err, data) => {
-          if (err) onerror(err);
-          else onload(binary ? data.buffer : data);
-        });
-      };
-      if (!Module["thisProgram"] && process.argv.length > 1) {
-        thisProgram = process.argv[1].replace(/\\/g, "/");
-      }
-      arguments_ = process.argv.slice(2);
-      quit_ = (status, toThrow) => {
-        process.exitCode = status;
-        throw toThrow;
-      };
-      Module["inspect"] = () => "[Emscripten Module object]";
+      
     } else if (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER) {
       if (ENVIRONMENT_IS_WORKER) {
         scriptDirectory = self.location.href;
