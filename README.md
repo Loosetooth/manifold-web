@@ -73,8 +73,6 @@ Copy the following files into this repo:
     "manifold.d.ts",
     "manifold-encapsulated-types.d.ts",
     "manifold-global-types.d.ts",
-    "examples/examples.js",
-    "test/test.js",
 ]
 ```
 
