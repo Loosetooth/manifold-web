@@ -639,7 +639,7 @@ var Module = (() => {
     }
     var read_, readAsync, readBinary, setWindowTitle;
     if (ENVIRONMENT_IS_NODE) {
-      
+
     } else if (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER) {
       if (ENVIRONMENT_IS_WORKER) {
         scriptDirectory = self.location.href;
@@ -3360,7 +3360,9 @@ var Module = (() => {
         typeof crypto["getRandomValues"] == "function"
       ) {
         return (view) => crypto.getRandomValues(view);
-      } else if (ENVIRONMENT_IS_NODE) {}
+      } else if (ENVIRONMENT_IS_NODE) {
+
+      }
       abort("initRandomDevice");
     };
     var randomFill = (view) => (randomFill = initRandomFill())(view);
@@ -3434,21 +3436,7 @@ var Module = (() => {
       if (!FS_stdin_getChar_buffer.length) {
         var result = null;
         if (ENVIRONMENT_IS_NODE) {
-          var BUFSIZE = 256;
-          var buf = Buffer.alloc(BUFSIZE);
-          var bytesRead = 0;
-          var fd = process.stdin.fd;
-          try {
-            bytesRead = fs.readSync(fd, buf);
-          } catch (e) {
-            if (e.toString().includes("EOF")) bytesRead = 0;
-            else throw e;
-          }
-          if (bytesRead > 0) {
-            result = buf.slice(0, bytesRead).toString("utf-8");
-          } else {
-            result = null;
-          }
+          
         } else if (
           typeof window != "undefined" &&
           typeof window.prompt == "function"
