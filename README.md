@@ -8,6 +8,11 @@ See [the discussion](https://github.com/elalish/manifold/discussions/372) for mo
 To install:
 `npm install git+https://github.com/Loosetooth/manifold-web.git`
 
+Please check out the different branches for each version of manifold.
+In order to install a specific branch:
+
+`npm install git+https://github.com/Loosetooth/manifold-web.git#v2.2.2`
+
 Some tips:
 
 You might need to pass a reference of the `.wasm` url to the manifold instance:
@@ -73,8 +78,6 @@ Copy the following files into this repo:
     "manifold.d.ts",
     "manifold-encapsulated-types.d.ts",
     "manifold-global-types.d.ts",
-    "examples/examples.js",
-    "test/test.js",
 ]
 ```
 
