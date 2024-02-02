@@ -639,6 +639,7 @@ var Module = (() => {
     }
     var read_, readAsync, readBinary, setWindowTitle;
     if (ENVIRONMENT_IS_NODE) {
+      
     } else if (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER) {
       if (ENVIRONMENT_IS_WORKER) {
         scriptDirectory = self.location.href;
@@ -3360,6 +3361,7 @@ var Module = (() => {
       ) {
         return (view) => crypto.getRandomValues(view);
       } else if (ENVIRONMENT_IS_NODE) {
+        
       }
       abort("initRandomDevice");
     };
@@ -3434,6 +3436,7 @@ var Module = (() => {
       if (!FS_stdin_getChar_buffer.length) {
         var result = null;
         if (ENVIRONMENT_IS_NODE) {
+          
         } else if (
           typeof window != "undefined" &&
           typeof window.prompt == "function"
