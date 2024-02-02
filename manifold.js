@@ -639,7 +639,6 @@ var Module = (() => {
     }
     var read_, readAsync, readBinary, setWindowTitle;
     if (ENVIRONMENT_IS_NODE) {
-
     } else if (ENVIRONMENT_IS_WEB || ENVIRONMENT_IS_WORKER) {
       if (ENVIRONMENT_IS_WORKER) {
         scriptDirectory = self.location.href;
@@ -891,10 +890,10 @@ var Module = (() => {
       function receiveInstance(instance, module) {
         var exports = instance.exports;
         wasmExports = exports;
-        wasmMemory = wasmExports["Ma"];
+        wasmMemory = wasmExports["Na"];
         updateMemoryViews();
-        wasmTable = wasmExports["Oa"];
-        addOnInit(wasmExports["Na"]);
+        wasmTable = wasmExports["Pa"];
+        addOnInit(wasmExports["Oa"]);
         removeRunDependency("wasm-instantiate");
         return exports;
       }
@@ -3361,7 +3360,6 @@ var Module = (() => {
       ) {
         return (view) => crypto.getRandomValues(view);
       } else if (ENVIRONMENT_IS_NODE) {
-
       }
       abort("initRandomDevice");
     };
@@ -3436,7 +3434,6 @@ var Module = (() => {
       if (!FS_stdin_getChar_buffer.length) {
         var result = null;
         if (ENVIRONMENT_IS_NODE) {
-          
         } else if (
           typeof window != "undefined" &&
           typeof window.prompt == "function"
@@ -6152,12 +6149,12 @@ var Module = (() => {
       B: ___cxa_begin_catch,
       K: ___cxa_end_catch,
       a: ___cxa_find_matching_catch_2,
-      j: ___cxa_find_matching_catch_3,
+      k: ___cxa_find_matching_catch_3,
       S: ___cxa_rethrow,
       h: ___cxa_throw,
       na: ___cxa_uncaught_exceptions,
       d: ___resumeException,
-      Ca: __embind_finalize_value_object,
+      Da: __embind_finalize_value_object,
       ca: __embind_register_bigint,
       sa: __embind_register_bool,
       x: __embind_register_class,
@@ -6173,24 +6170,24 @@ var Module = (() => {
       T: __embind_register_std_string,
       M: __embind_register_std_wstring,
       E: __embind_register_value_object,
-      Da: __embind_register_value_object_field,
+      Ea: __embind_register_value_object_field,
       ta: __embind_register_void,
-      Ia: __emval_as,
-      ya: __emval_call_method,
-      Fa: __emval_call_void_method,
-      Ka: __emval_decref,
-      Ha: __emval_equals,
-      Aa: __emval_get_method_caller,
-      Ja: __emval_get_property,
-      Ga: __emval_incref,
+      Ja: __emval_as,
+      za: __emval_call_method,
+      Ga: __emval_call_void_method,
+      La: __emval_decref,
+      Ia: __emval_equals,
+      Ba: __emval_get_method_caller,
+      Ka: __emval_get_property,
+      Ha: __emval_incref,
       F: __emval_new_cstring,
       $: __emval_new_object,
-      oa: __emval_run_destructors,
-      La: __emval_set_property,
+      pa: __emval_run_destructors,
+      Ma: __emval_set_property,
       y: __emval_take_value,
       L: _abort,
       qa: _emscripten_memcpy_big,
-      pa: _emscripten_resize_heap,
+      oa: _emscripten_resize_heap,
       ja: _environ_get,
       ka: _environ_sizes_get,
       la: _fd_close,
@@ -6211,27 +6208,28 @@ var Module = (() => {
       Q: invoke_iiiiiiii,
       J: invoke_iiiiiiiiiiii,
       aa: invoke_jiiii,
-      k: invoke_v,
+      j: invoke_v,
       f: invoke_vi,
       va: invoke_vidi,
       g: invoke_vii,
+      Aa: invoke_viid,
       G: invoke_viiddi,
       V: invoke_viidi,
       wa: invoke_viidiidid,
       u: invoke_viif,
-      za: invoke_viifff,
-      Ba: invoke_viififi,
+      ya: invoke_viifff,
+      Ca: invoke_viififi,
       e: invoke_viii,
       X: invoke_viiif,
-      Ea: invoke_viiiffi,
+      Fa: invoke_viiiffi,
       m: invoke_viiii,
-      q: invoke_viiiii,
+      p: invoke_viiiii,
       xa: invoke_viiiiid,
       _: invoke_viiiiif,
       C: invoke_viiiiii,
       v: invoke_viiiiiii,
       Y: invoke_viiiiiiiii,
-      p: invoke_viiiiiiiiii,
+      q: invoke_viiiiiiiiii,
       I: invoke_viiiiiiiiiiiiiii,
       Z: invoke_viiiiiiiiiiiiiiiiii,
       ga: invoke_viiij,
@@ -6243,30 +6241,30 @@ var Module = (() => {
       ia: _strftime_l,
     };
     var wasmExports = createWasm();
-    var ___wasm_call_ctors = () => (___wasm_call_ctors = wasmExports["Na"])();
+    var ___wasm_call_ctors = () => (___wasm_call_ctors = wasmExports["Oa"])();
     var ___cxa_free_exception = (a0) =>
       (___cxa_free_exception = wasmExports["__cxa_free_exception"])(a0);
-    var _free = (a0) => (_free = wasmExports["Pa"])(a0);
-    var _malloc = (a0) => (_malloc = wasmExports["Qa"])(a0);
-    var ___getTypeName = (a0) => (___getTypeName = wasmExports["Ra"])(a0);
+    var _free = (a0) => (_free = wasmExports["Qa"])(a0);
+    var _malloc = (a0) => (_malloc = wasmExports["Ra"])(a0);
+    var ___getTypeName = (a0) => (___getTypeName = wasmExports["Sa"])(a0);
     var __embind_initialize_bindings = (Module["__embind_initialize_bindings"] =
       () =>
         (__embind_initialize_bindings = Module["__embind_initialize_bindings"] =
-          wasmExports["Sa"])());
+          wasmExports["Ta"])());
     var ___errno_location = () =>
       (___errno_location = wasmExports["__errno_location"])();
-    var _setThrew = (a0, a1) => (_setThrew = wasmExports["Ta"])(a0, a1);
-    var setTempRet0 = (a0) => (setTempRet0 = wasmExports["Ua"])(a0);
-    var stackSave = () => (stackSave = wasmExports["Va"])();
-    var stackRestore = (a0) => (stackRestore = wasmExports["Wa"])(a0);
+    var _setThrew = (a0, a1) => (_setThrew = wasmExports["Ua"])(a0, a1);
+    var setTempRet0 = (a0) => (setTempRet0 = wasmExports["Va"])(a0);
+    var stackSave = () => (stackSave = wasmExports["Wa"])();
+    var stackRestore = (a0) => (stackRestore = wasmExports["Xa"])(a0);
     var ___cxa_decrement_exception_refcount = (a0) =>
-      (___cxa_decrement_exception_refcount = wasmExports["Xa"])(a0);
+      (___cxa_decrement_exception_refcount = wasmExports["Ya"])(a0);
     var ___cxa_increment_exception_refcount = (a0) =>
-      (___cxa_increment_exception_refcount = wasmExports["Ya"])(a0);
+      (___cxa_increment_exception_refcount = wasmExports["Za"])(a0);
     var ___cxa_can_catch = (a0, a1, a2) =>
-      (___cxa_can_catch = wasmExports["Za"])(a0, a1, a2);
+      (___cxa_can_catch = wasmExports["_a"])(a0, a1, a2);
     var ___cxa_is_pointer_type = (a0) =>
-      (___cxa_is_pointer_type = wasmExports["_a"])(a0);
+      (___cxa_is_pointer_type = wasmExports["$a"])(a0);
     var dynCall_viijii = (Module["dynCall_viijii"] = (
       a0,
       a1,
@@ -6276,7 +6274,7 @@ var Module = (() => {
       a5,
       a6
     ) =>
-      (dynCall_viijii = Module["dynCall_viijii"] = wasmExports["$a"])(
+      (dynCall_viijii = Module["dynCall_viijii"] = wasmExports["ab"])(
         a0,
         a1,
         a2,
@@ -6286,7 +6284,7 @@ var Module = (() => {
         a6
       ));
     var dynCall_viiij = (Module["dynCall_viiij"] = (a0, a1, a2, a3, a4, a5) =>
-      (dynCall_viiij = Module["dynCall_viiij"] = wasmExports["ab"])(
+      (dynCall_viiij = Module["dynCall_viiij"] = wasmExports["bb"])(
         a0,
         a1,
         a2,
@@ -6303,7 +6301,7 @@ var Module = (() => {
       a5,
       a6
     ) =>
-      (dynCall_vijiii = Module["dynCall_vijiii"] = wasmExports["bb"])(
+      (dynCall_vijiii = Module["dynCall_vijiii"] = wasmExports["cb"])(
         a0,
         a1,
         a2,
@@ -6313,7 +6311,7 @@ var Module = (() => {
         a6
       ));
     var dynCall_vijii = (Module["dynCall_vijii"] = (a0, a1, a2, a3, a4, a5) =>
-      (dynCall_vijii = Module["dynCall_vijii"] = wasmExports["cb"])(
+      (dynCall_vijii = Module["dynCall_vijii"] = wasmExports["db"])(
         a0,
         a1,
         a2,
@@ -6322,7 +6320,7 @@ var Module = (() => {
         a5
       ));
     var dynCall_viiji = (Module["dynCall_viiji"] = (a0, a1, a2, a3, a4, a5) =>
-      (dynCall_viiji = Module["dynCall_viiji"] = wasmExports["db"])(
+      (dynCall_viiji = Module["dynCall_viiji"] = wasmExports["eb"])(
         a0,
         a1,
         a2,
@@ -6331,7 +6329,7 @@ var Module = (() => {
         a5
       ));
     var dynCall_jiji = (Module["dynCall_jiji"] = (a0, a1, a2, a3, a4) =>
-      (dynCall_jiji = Module["dynCall_jiji"] = wasmExports["eb"])(
+      (dynCall_jiji = Module["dynCall_jiji"] = wasmExports["fb"])(
         a0,
         a1,
         a2,
@@ -6339,7 +6337,7 @@ var Module = (() => {
         a4
       ));
     var dynCall_jiiii = (Module["dynCall_jiiii"] = (a0, a1, a2, a3, a4) =>
-      (dynCall_jiiii = Module["dynCall_jiiii"] = wasmExports["fb"])(
+      (dynCall_jiiii = Module["dynCall_jiiii"] = wasmExports["gb"])(
         a0,
         a1,
         a2,
@@ -6355,7 +6353,7 @@ var Module = (() => {
       a5,
       a6
     ) =>
-      (dynCall_iiiiij = Module["dynCall_iiiiij"] = wasmExports["gb"])(
+      (dynCall_iiiiij = Module["dynCall_iiiiij"] = wasmExports["hb"])(
         a0,
         a1,
         a2,
@@ -6375,7 +6373,7 @@ var Module = (() => {
       a7,
       a8
     ) =>
-      (dynCall_iiiiijj = Module["dynCall_iiiiijj"] = wasmExports["hb"])(
+      (dynCall_iiiiijj = Module["dynCall_iiiiijj"] = wasmExports["ib"])(
         a0,
         a1,
         a2,
@@ -6398,7 +6396,7 @@ var Module = (() => {
       a8,
       a9
     ) =>
-      (dynCall_iiiiiijj = Module["dynCall_iiiiiijj"] = wasmExports["ib"])(
+      (dynCall_iiiiiijj = Module["dynCall_iiiiiijj"] = wasmExports["jb"])(
         a0,
         a1,
         a2,
@@ -6685,6 +6683,16 @@ var Module = (() => {
       var sp = stackSave();
       try {
         return getWasmTableEntry(index)();
+      } catch (e) {
+        stackRestore(sp);
+        if (e !== e + 0) throw e;
+        _setThrew(1, 0);
+      }
+    }
+    function invoke_viid(index, a1, a2, a3) {
+      var sp = stackSave();
+      try {
+        getWasmTableEntry(index)(a1, a2, a3);
       } catch (e) {
         stackRestore(sp);
         if (e !== e + 0) throw e;
